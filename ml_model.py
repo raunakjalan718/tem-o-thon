@@ -1,81 +1,73 @@
-import numpy as np
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import StandardScaler
+
+# Load the dataset
+df = pd.read_csv("leakage_detection_dataset.csv")  # Ensure file is in the same directory
+
+# Display first few rows
+print(df.head())
+
+
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, classification_report
-import joblib  # For saving and loading the model
+from sklearn.preprocessing import StandardScaler
 
-# 1️⃣ Generate Synthetic Data (Simulating Water Flow Sensor Readings)
-np.random.seed(42)  # Ensures reproducibility
-data_size = 500  # Number of data points
+# Features (input variables) and target variable (output)
+X = df[['Flow_A (L/min)', 'Flow_C (L/min)', 'Temperature (°C)', 'Time_of_Day (hr)']]
+y = df['Leakage']
 
-Flow_A = np.random.uniform(5, 10, data_size)  # Flow rate at sensor A (L/min)
-Flow_C = Flow_A - np.random.uniform(0, 2, data_size)  # Flow rate at sensor C (L/min)
-Temperature = np.random.uniform(20, 40, data_size)  # Temperature in °C
-Time_of_Day = np.random.randint(0, 24, data_size)  # Time in hours (0-23)
-
-# Leakage Label: 1 (Leakage) if Flow difference > 1.5 L/min, else 0 (No Leakage)
-Leakage = np.where((Flow_A - Flow_C) > 1.5, 1, 0)
-
-# 2️⃣ Create DataFrame
-df = pd.DataFrame({
-    "Flow_A (L/min)": Flow_A,
-    "Flow_C (L/min)": Flow_C,
-    "Temperature (°C)": Temperature,
-    "Time_of_Day (hr)": Time_of_Day,
-    "Leakage": Leakage
-})
-
-# 3️⃣ Split Data into Training and Testing Sets
-X = df.drop(columns=["Leakage"])  # Features
-y = df["Leakage"]  # Target variable
-
+# Split into 80% training and 20% testing
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# 4️⃣ Normalize Features for Better Accuracy
+# Normalize the data
 scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)  # Use same scaler for test set
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
 
-# 5️⃣ Train the Random Forest Model
-rf_model = RandomForestClassifier(n_estimators=100, random_state=42)
-rf_model.fit(X_train_scaled, y_train)
 
-# 6️⃣ Evaluate Model Performance
-y_pred = rf_model.predict(X_test_scaled)
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, classification_report
+
+# Initialize Random Forest model
+model = RandomForestClassifier(n_estimators=100, random_state=42)
+model.fit(X_train, y_train)  # Train the model
+
+# Predict on test data
+y_pred = model.predict(X_test)
+
+# Evaluate model accuracy
 accuracy = accuracy_score(y_test, y_pred)
-print(f"✅ Model Accuracy: {accuracy:.2f}\n")
+print(f"Model Accuracy: {accuracy:.2f}")
 
-print("🔎 Classification Report:")
+# Print classification report
 print(classification_report(y_test, y_pred))
 
-# 7️⃣ Save the Trained Model and Scaler
-joblib.dump(rf_model, "leakage_model.pkl")
-joblib.dump(scaler, "scaler.pkl")
-print("✅ Model and Scaler Saved!")
+import joblib
 
-# 8️⃣ Load the Model for Prediction
-rf_model = joblib.load("leakage_model.pkl")
-scaler = joblib.load("scaler.pkl")
-print("✅ Model Loaded Successfully!\n")
+# Save the trained model
+joblib.dump(model, "leakage_detection_model.pkl")
 
-# 9️⃣ Predict Leakage for a New Sensor Reading
-# New data input (Simulating real-time sensor data)
-X_new = np.array([7.5, 6.0, 25, 10])  # Flow_A, Flow_C, Temperature, Time
+# Load the saved model
+loaded_model = joblib.load("leakage_detection_model.pkl")
+print("Model Loaded Successfully!")
 
-# ✅ FIX: Convert X_new to a DataFrame with Correct Feature Names
-feature_names = ["Flow_A (L/min)", "Flow_C (L/min)", "Temperature (°C)", "Time_of_Day (hr)"]
-X_new_df = pd.DataFrame([X_new], columns=feature_names)  # Ensuring same feature names
 
-# Standardize using the trained scaler
-X_new_scaled = scaler.transform(X_new_df)
+# Example new input data
+new_data = scaler.transform([[8.0, 7.1, 30, 14]])
 
-# Make prediction
-prediction = rf_model.predict(X_new_scaled)
+# Predict leakage
+prediction = loaded_model.predict(new_data)
+print("Leakage Detected" if prediction[0] == 1 else "No Leakage Detected")
 
-# Display Result
-if prediction[0] == 1:
-    print("⚠️ Leakage Detected!")
-else:
-    print("✅ No Leakage Detected!")
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Calculate Flow Difference
+df['Flow_Diff'] = df['Flow_A (L/min)'] - df['Flow_C (L/min)']
+
+# Create a box plot
+plt.figure(figsize=(8, 6))
+sns.boxplot(x=df['Leakage'], y=df['Flow_Diff'])
+plt.xlabel("Leakage (0 = No, 1 = Yes)")
+plt.ylabel("Flow Difference (A - C)")
+plt.title("Water Flow Difference vs. Leakage")
+plt.show()
